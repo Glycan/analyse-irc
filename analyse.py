@@ -1,12 +1,12 @@
-from collections import defaultdict
-from pdb import pm
+from collections import defaultdict, Counter
+from pdb import pm, set_trace
 
-zero = lambda :0
 
 class User:
     def __init__(self, nick):
         self.nick = nick
-        self.mentions = defaultdict(zero)
+        self.mentions = []
+        self.messages = 1 # user is only made after reading a message
         
     def add_mention(self, mention):
         self.mentions[mention] += 1
@@ -15,53 +15,62 @@ class User:
         return self.nick
     
     def __repr__(self):
-        return "<" + self.nick + ">: " + repr(sorted(self.mentions.items(), key = lambda x:-x[1]))
+        return "<{}, {} messages>".format(self.nick, self.messages)
 
 
 class Analyse:
     def __init__(self, f):
-        self.f = f
-        self.nicks = {}
-        self.users = []
+        self.lines = f
+        s = User("sylvie")
+        self.users = [s]
+        self.nicks = {"sylvie":s, "technillogue":s, "techn1llogue":s}
     
     def collect_nicks(self):
         parsed_lines = []
-        for line in self.f:
+        for line in self.lines:
             # 19:21 < dx> edef: hi i'm inside you
             if line[6] == "<":
-                nick, line = line[6:].split(">", 1)
-                self.nicks[nick] = User(nick)
-                self.users.append(nicks[nick])
+                nick, line = line[8:].split(">", 1)
+                if nick not in self.nicks:
+                    self.nicks[nick] = User(nick)
+                    self.users.append(self.nicks[nick])
+                else:
+                    self.nicks[nick].messages += 1
                 parsed_lines.append((nick, line))
             if " is now known as " in line:
                 # 07:20 -!- puck1pedia is now known as puckipedia
-                old, new = line[10:][:-1].split(" is now known as ") 
-                if new in nicks:
+                old, new = line[10:-1].split(" is now known as ") 
+                if old in self.nicks:
                     user = self.nicks[old]
                     user.nick = new
                     self.nicks[new] = user
-            return parsed_lines
+        return parsed_lines
     
     def collect_mentions(self, parsed_lines):
+        nicks = self.nicks.keys()
         for nick, line in parsed_lines:
-            for mention in self.nicks.keys():
-                if mention in line:
-                    self.nicks[nick].add_mention(nicks[mention])
-
-    
-    def scale_mentions(self):
+            mentions = self.nicks[nick].mentions
+            [mentions.append(self.nicks[nick].nick)
+            for nick in nicks if nick in line]
+        
+    def count_mentions(self):
         for user in self.users:
-            total = sum(user.mentions.values())
-            for mention,value in user.mentions.items():
-                user.mentions[mention] = round(value * 100.0 / total, 2)
+            count = Counter(user.mentions)
+            total = sum(count.values())
+            if total:
+                user.mentions = [
+                    (mention, value // total) 
+                    for mention, value in count.most_common()
+                ]
+                
 
         
     def main(self):
         self.collect_mentions(self.collect_nicks())
-        self.scale_mentions()
+        self.count_mentions()
 
 with open("../logs") as f:
-    a = Analyse(f.readlines())
+    a = Analyse(f)
     a.main()
 
 
